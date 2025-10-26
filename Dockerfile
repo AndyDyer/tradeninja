@@ -3,7 +3,7 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # Install deps (add numpy manually since code imports it but toml misses it)
-RUN pip install --no-cache-dir streamlit==1.38.0 pandas==2.2.3 numpy==2.1.2
+RUN pip install --no-cache-dir streamlit==1.50.0 pandas==2.3.3 numpy==2.2.6
 
 # Copy app code (assumes csv data files are in trade2/ or handled via upload/volume)
 COPY . /app
