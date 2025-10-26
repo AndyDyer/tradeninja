@@ -11,4 +11,4 @@ COPY . /app
 EXPOSE 8080
 
 # Run streamlit
-CMD ["streamlit", "run", "main.py", "--server.port=8080", "--server.address=0.0.0.0"]
+CMD ["streamlit", "run", "trade/main.py", "--server.port=8080", "--server.address=0.0.0.0"]
