@@ -6,6 +6,9 @@ from utils import (
     prepare_display_df,
     apply_z_color,
     data_selector,
+    get_teams,
+    is_real_team,
+    filter_team_players,
 )
 
 
@@ -30,9 +33,14 @@ def display_player_data(data_with_z):
     st.subheader("Player Data")
     view_mode = st.radio("View", ["Z-Scores", "Raw Stats"], index=0, key="full_view")
     show_z = view_mode == "Z-Scores"
+    real_teams = sorted([t for t in get_teams(data_with_z) if is_real_team(t)])
+    all_option = "All Teams"
+    selected_team = st.selectbox("Filter by Team", [all_option] + real_teams)
     search = st.text_input("Search Player", "")
     punted = st.multiselect("Punt Categories", STATS_9CAT, []) if show_z else []
     display_df = prepare_display_df(data_with_z, show_z)
+    if selected_team != all_option:
+        display_df = display_df[display_df["Status"] == selected_team]
     display_df = filter_by_search(display_df, search)
     if show_z:
         z_cols = [f"Z_{stat}" for stat in STATS_9CAT]
