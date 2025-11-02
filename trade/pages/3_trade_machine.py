@@ -100,6 +100,38 @@ def display_h2h_analysis(
         st.markdown(" ".join(stat_results), unsafe_allow_html=True)
 
 
+def create_trade_df(
+    pre: Dict[str, float], post: Dict[str, float], show_z: bool
+) -> pd.DataFrame:
+    stats = list(pre.keys())
+    data = {
+        "Pre": pre,
+        "Post": post,
+        "Delta": {s: post[s] - pre[s] for s in stats},
+    }
+    df = pd.DataFrame.from_dict(data, orient="index", columns=stats)
+    df.index.name = " "
+
+    def delta_color(val: float, stat: str) -> str:
+        if val == 0:
+            return "color: black"
+        if show_z:
+            return "color: green" if val > 0 else "color: red"
+        else:
+            if stat in NEGATIVE_STATS:
+                return "color: green" if val < 0 else "color: red"
+            else:
+                return "color: green" if val > 0 else "color: red"
+
+    def row_style(row):
+        if row.name != "Delta":
+            return [""] * len(row)
+        return [delta_color(val, stat) for stat, val in row.items()]
+
+    styled = df.style.apply(row_style, axis=1)
+    return styled
+
+
 def handle_trade_simulation(
     team_a: str,
     team_b: str,
@@ -114,7 +146,7 @@ def handle_trade_simulation(
         st.session_state.trade_results = results
     if st.session_state.trade_results:
         view_mode = st.radio(
-            "View", ["Average Z-Scores", "Average Stats"], index=0, key="trade_view"
+            "View", ["Average Z-Scores", "Average Stats"], index=1, key="trade_view"
         )
         show_z = view_mode == "Average Z-Scores"
         real_teams = [t for t in get_teams(data_with_z) if is_real_team(t)]
@@ -143,11 +175,46 @@ def handle_trade_simulation(
             post_b = process_z_dict_for_punt(post_b, selected_stats)
         else:
             pre_a, post_a, pre_b, post_b = pre_a_raw, post_a_raw, pre_b_raw, post_b_raw
+
+        if a_to_trade or b_to_trade:
+            st.subheader("Average Stats for Players Involved in the Trade")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"**Players {team_a} is sending to {team_b}**")
+                team_a_data = filter_team_players(data_with_z, team_a)
+                traded_a = team_a_data[team_a_data["Player"].isin(a_to_trade)]
+                if not traded_a.empty:
+                    display_df_a = prepare_display_df(traded_a, False)
+                    avg_a = display_df_a.mean(numeric_only=True).to_frame().T
+                    avg_a["Player"] = "Average"
+                    for col in display_df_a.columns:
+                        if col not in avg_a.columns:
+                            avg_a[col] = ""
+                    display_df_a = pd.concat([display_df_a, avg_a])
+                    st.dataframe(display_df_a.style, hide_index=True)
+                else:
+                    st.write("None")
+            with col2:
+                st.markdown(f"**Players {team_b} is sending to {team_a}**")
+                team_b_data = filter_team_players(data_with_z, team_b)
+                traded_b = team_b_data[team_b_data["Player"].isin(b_to_trade)]
+                if not traded_b.empty:
+                    display_df_b = prepare_display_df(traded_b, False)
+                    avg_b = display_df_b.mean(numeric_only=True).to_frame().T
+                    avg_b["Player"] = "Average"
+                    for col in display_df_b.columns:
+                        if col not in avg_b.columns:
+                            avg_b[col] = ""
+                    display_df_b = pd.concat([display_df_b, avg_b])
+                    st.dataframe(display_df_b.style, hide_index=True)
+                else:
+                    st.write("None")
+
         st.subheader(f"{team_a} {view_mode}: Pre vs Post")
-        a_styled = style_trade_df(pre_a, post_a, show_z)
+        a_styled = create_trade_df(pre_a, post_a, show_z)
         st.dataframe(a_styled)
         st.subheader(f"{team_b} {view_mode}: Pre vs Post")
-        b_styled = style_trade_df(pre_b, post_b, show_z)
+        b_styled = create_trade_df(pre_b, post_b, show_z)
         st.dataframe(b_styled)
 
         st.subheader(f"H2H Analysis for {team_a}")

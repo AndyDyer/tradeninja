@@ -29,13 +29,72 @@ def load_data(selected_path: str, uploaded_file) -> pd.DataFrame:
     return pd.read_csv(selected_path)
 
 
+def combine_data() -> pd.DataFrame:
+    last = pd.read_csv("data/last_season.csv")
+    this = pd.read_csv("data/this_season_so_far.csv")
+    combined = pd.merge(last, this, on="ID", how="outer", suffixes=("_last", "_this"))
+    stat_cols = [
+        "MIN",
+        "FGM",
+        "FGA",
+        "FTM",
+        "FTA",
+        "3PTM",
+        "PTS",
+        "REB",
+        "AST",
+        "ST",
+        "BLK",
+        "TO",
+    ]
+    non_stat_cols = [
+        "Player",
+        "Team",
+        "Position",
+        "RkOv",
+        "Status",
+        "Opponent",
+        "Score",
+        "Ros",
+        "+/-",
+    ]
+    combined["GP"] = combined["GP_last"].fillna(0) + combined["GP_this"].fillna(0)
+    for stat in stat_cols:
+        combined[stat] = (
+            combined["GP_last"].fillna(0) * combined[stat + "_last"].fillna(0)
+            + combined["GP_this"].fillna(0) * combined[stat + "_this"].fillna(0)
+        ) / combined["GP"].replace(0, np.nan)
+        combined[stat] = combined[stat].fillna(0)
+    total_fgm = combined["GP_last"].fillna(0) * combined["FGM_last"].fillna(
+        0
+    ) + combined["GP_this"].fillna(0) * combined["FGM_this"].fillna(0)
+    total_fga = combined["GP_last"].fillna(0) * combined["FGA_last"].fillna(
+        0
+    ) + combined["GP_this"].fillna(0) * combined["FGA_this"].fillna(0)
+    combined["FG%"] = np.where(total_fga == 0, 0, total_fgm / total_fga)
+    total_ftm = combined["GP_last"].fillna(0) * combined["FTM_last"].fillna(
+        0
+    ) + combined["GP_this"].fillna(0) * combined["FTM_this"].fillna(0)
+    total_fta = combined["GP_last"].fillna(0) * combined["FTA_last"].fillna(
+        0
+    ) + combined["GP_this"].fillna(0) * combined["FTA_this"].fillna(0)
+    combined["FT%"] = np.where(total_fta == 0, 0, total_ftm / total_fta)
+    for col in non_stat_cols:
+        if col + "_this" in combined.columns:
+            combined[col] = combined[col + "_this"].combine_first(
+                combined[col + "_last"]
+            )
+    suffixed = [c for c in combined.columns if "_last" in c or "_this" in c]
+    combined = combined.drop(columns=suffixed)
+    return combined
+
+
 def data_selector() -> pd.DataFrame:
     if "data_source" not in st.session_state:
-        st.session_state.data_source = "Last Season"
-    index = 0 if st.session_state.data_source == "Last Season" else 1
-    data_source = st.radio(
-        "Data Source", ["Last Season", "This Season So Far"], index=index
-    )
+        st.session_state.data_source = "This Season So Far"
+    options = ["This Season So Far", "Last Season", "Combined"]
+    index = options.index(st.session_state.data_source)
+    data_source = st.radio("Data Source", options, index=index)
     st.session_state.data_source = data_source
     uploaded_file = st.file_uploader("Upload CSV", type="csv")
     if "use_uploaded" not in st.session_state:
@@ -54,12 +113,15 @@ def data_selector() -> pd.DataFrame:
     elif st.session_state.use_uploaded:
         data = st.session_state.uploaded_data
     else:
-        selected_path = (
-            "last_season.csv"
-            if st.session_state.data_source == "Last Season"
-            else "this_season_so_far.csv"
-        )
-        data = load_data(f"data/{selected_path}", None)
+        if data_source == "Combined":
+            data = combine_data()
+        else:
+            selected_path = (
+                "data/last_season.csv"
+                if data_source == "Last Season"
+                else "data/this_season_so_far.csv"
+            )
+            data = pd.read_csv(selected_path)
     data_with_z = add_z_scores(data)
     st.session_state.data_with_z = data_with_z
     return data_with_z
